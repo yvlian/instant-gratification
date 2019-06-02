@@ -33,15 +33,12 @@ rfc = RandomForestClassifier(
     ,criterion='gini'
 )
 
-param_grid = {'n_estimators': np.arange(100, 300, 50)}
+param_grid = {'n_estimators': np.arange(100, 101, 50)}
 GS = GridSearchCV(rfc,param_grid,cv=5)
 GS.fit(data,y)
-# score = rfc.score(val_x, val_y)
-# feature_importance = rfc.feature_importances_
-# sorted_indexes = np.argsort(feature_importance,reversed=True)
-#
-# sorted_importance = [feature_importance[i] for i in sorted_indexes]
-# sorted_cols = [data.columns[i] for i in sorted_indexes]
+f = open('./data/result.txt',mode='w')
+f.write(str(GS.best_params_))
+f.write(str(GS.best_score_))
+f.close()
 print(GS.best_params_)
 print(GS.best_score_)
-a = 1
