@@ -2,43 +2,80 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
+import xgboost
+from xgboost import XGBClassifier
 import numpy as np
 
+def normalize(series):
+    u = series.mean()
+    sigma = series.std()
+    return (series - u)/sigma
 
-data = pd.read_csv('./data/train.csv')
-y = data.pop('target')
-id = data.pop('id')
+df = pd.read_csv('./data/train.csv')
+label_col_name = 'target'
+#1.均衡否
+print('label value_counts:\n', df[label_col_name].value_counts())
+#2.重复否   一些不能重复的属性，如id, 若重复了，需要去重
+if sum(df['id'].duplicated()) != 0:
+    df['id'].drop_duplicates()
+    print('属性 id 有重复，已去重。')
 
-""" 有一些参数是没有参照的，很难说清一个范围，这种情况下我们使用学习曲线，看趋势 从曲线跑出的结果中选取一个更小的区间，再跑曲线
-param_grid = {'n_estimators':np.arange(0, 200, 10)}
+#3.空值否
+# df.info(verbose=True)
+# df.describe()
 
-param_grid = {'max_depth':np.arange(1, 20, 1)}     param_grid = {'max_leaf_nodes':np.arange(25,50,1)}    
-对于大型数据集，可以尝试从1000来构建，先输入1000，每100个叶子一个区间，再逐渐缩小范围
+id = df.pop('id')
+#4 normalize 1th
+cols_except_lable_col = df.columns.drop(label_col_name)
+df[cols_except_lable_col] = df[cols_except_lable_col].apply(lambda x:normalize(x))
 
-有一些参数是可以找到一个范围的，或者说我们知道他们的取值和随着他们的取值，模型的整体准确率会如何变化，这 样的参数我们就可以直接跑网格搜索 param_grid = {'criterion':['gini', 'entropy']}
 
-param_grid = {'min_samples_split':np.arange(2, 2+20, 1)}
+corr = df.corr()
+describe = corr[label_col_name].abs().describe()
+corr = corr[corr[label_col_name]!=1]
+items = corr[label_col_name].items()
+corr.pop(label_col_name)
+#去除同label低相关的属性
+for k,v in items:
+    if abs(v) < describe['25%']:
+        df.pop(k)
+#相关度高的属性去重
+highly_correlated = dict()
+for col in corr.columns:
+    index = corr[col][corr[col]>0.9].index
+    index = index.drop(col)
+    highly_correlated[col] = index
 
-param_grid = {'min_samples_leaf':np.arange(1, 1+10, 1)}    param_grid = {'max_features':np.arange(5,30,1)} 
+for k,v,in highly_correlated.items():
+    if k in df.columns:
+        flag = False
+        for i in v:
+            if i in df.columns:
+                flag = True
+                break
+        if flag:
+            df.pop(k)
 
-"""
+#构造新特征 x -> (x^2 -1)/2 (x^3 -1)/3  e^x logx
+cols_except_lable_col = df.columns.drop(label_col_name)
+for col in cols_except_lable_col:
+    df[col + 'X^2'] = df[col].apply(lambda x: (x**2-1)/2)
+    df[col + 'X^3'] = df[col].apply(lambda x: (x**3-1)/3)
+    df[col + 'e^X'] = df[col].apply(lambda x: np.exp(x))
+    df[col + 'logX'] = df[col].apply(lambda x: np.log(np.abs(x)))
 
-rfc = RandomForestClassifier(
-    n_estimators=100
-    ,max_depth=None
-    ,max_features='auto'
-    ,random_state=90
-    ,min_samples_leaf=1
-    ,min_samples_split=2
-    ,criterion='gini'
-)
+#normalize 2th
+cols_except_lable_col = df.columns.drop(label_col_name)
+df[cols_except_lable_col] = df[cols_except_lable_col].apply(lambda x:normalize(x))
 
-param_grid = {'n_estimators': np.arange(100, 101, 50)}
-GS = GridSearchCV(rfc,param_grid,cv=5)
-GS.fit(data,y)
-f = open('./data/result.txt',mode='w')
-f.write(str(GS.best_params_))
-f.write(str(GS.best_score_))
-f.close()
-print(GS.best_params_)
-print(GS.best_score_)
+#model
+
+label = df.pop(label_col_name)
+X_train, X_test, y_train, y_test = train_test_split(df, label, test_size=0.33, random_state=42)
+
+xgb = XGBClassifier()
+xgb.fit(X_train,y_train)
+
+score = xgb.score(X_test,y_test)
+with open('./data/result.txt',mode='w') as f:
+    f.write(str(score))
