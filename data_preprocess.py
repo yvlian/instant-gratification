@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import SGDClassifier
 from sklearn.model_selection import train_test_split, GridSearchCV
 import xgboost
 from xgboost import XGBClassifier
@@ -73,7 +74,7 @@ id = df.pop('id')
 label = df.pop(label_col_name)
 X_train, X_test, y_train, y_test = train_test_split(df, label, test_size=0.33, random_state=42)
 
-xgb = XGBClassifier()
+xgb = SGDClassifier()
 xgb.fit(X_train,y_train)
 
 score = xgb.score(X_test,y_test)
